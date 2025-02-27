@@ -1,1 +1,131 @@
 Smart Dustbin Project 
+#include <ESP8266WiFi.h>
+#include <Servo.h>
+
+// WiFi Client
+WiFiClient client;
+
+// Pin Definitions
+#define RED_LED D7
+#define GREEN_LED D6
+#define ALARM D5
+#define TRIG_OBJ D0
+#define ECHO_OBJ D1
+#define TRIG_LEVEL D2
+#define ECHO_LEVEL D3
+
+// Constants
+const float VELOCITY = 0.034;
+const int SERVO_OPEN = 180;
+const int SERVO_CLOSED = 0;
+const int DISTANCE_THRESHOLD_OBJ = 7;
+const int DISTANCE_THRESHOLD_LEVEL = 5;
+const int ALARM_FREQUENCY = 1000;
+
+// Variables
+bool isFull, isOpen;
+Servo myServo;
+
+// WiFi Credentials
+const char ssid[] = "MANI DCS";
+const char password[] = "Mani1337";
+const char host[] = "thingworx.scetngp.com";
+const int httpsPort = 80;
+
+// ThingWorx Parameters
+const char THING[] = "dust_bin_sensors_Mani";
+const char PROPERTY1[] = "Full_empety";
+const char PROPERTY2[] = "Open_close";
+const char PROPERTY3[] = "Ultrasconic_level";
+const char PROPERTY4[] = "Ultrasconic_obj";
+const char APP_KEY[] = "6b3c910d-8ce5-4d18-916d-e9240a97ca0b";
+
+// Function to Send Data to ThingWorx
+void sendData(const char* thingName, const char* property, int value) {
+    if (!client.connect(host, httpsPort)) {
+        Serial.println(F("Connection failed"));
+        return;
+    }
+    String url = String(F("/Thingworx/Things/")) + thingName + F("/Properties/") + property;
+    String payload = String(F("{\"")) + property + F("\":\"") + String(value) + F("\"}");
+    
+    client.print(F("PUT ") + url + F(" HTTP/1.1\r\n") +
+                 F("Host: ") + host + F("\r\n") +
+                 F("appKey: ") + APP_KEY + F("\r\n") +
+                 F("x-thingworx-session: false\r\n") +
+                 F("Accept: application/json\r\n") +
+                 F("Connection: close\r\n") +
+                 F("Content-Type: application/json\r\n") +
+                 F("Content-Length: ") + String(payload.length()) + F("\r\n\r\n") +
+                 payload + F("\r\n\r\n"));
+    
+    client.stop();
+}
+
+void setup() {
+    pinMode(ALARM, OUTPUT);
+    pinMode(RED_LED, OUTPUT);
+    pinMode(GREEN_LED, OUTPUT);
+    pinMode(TRIG_OBJ, OUTPUT);
+    pinMode(ECHO_OBJ, INPUT);
+    pinMode(TRIG_LEVEL, OUTPUT);
+    pinMode(ECHO_LEVEL, INPUT);
+    myServo.attach(D4);
+    
+    Serial.begin(115200);
+    Serial.print(F("Connecting to "));
+    Serial.println(ssid);
+    WiFi.begin(ssid, password);
+    while (WiFi.status() != WL_CONNECTED) {
+        delay(500);
+        Serial.print(F("."));
+    }
+    Serial.println(F("\nWiFi connected"));
+    Serial.println(F("IP address: ") + WiFi.localIP().toString());
+}
+
+void loop() {
+    digitalWrite(TRIG_OBJ, LOW);
+    delayMicroseconds(2);
+    digitalWrite(TRIG_OBJ, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(TRIG_OBJ, LOW);
+    float distanceObj = (VELOCITY * pulseIn(ECHO_OBJ, HIGH)) / 2;
+    
+    digitalWrite(TRIG_LEVEL, LOW);
+    delayMicroseconds(2);
+    digitalWrite(TRIG_LEVEL, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(TRIG_LEVEL, LOW);
+    float distanceLevel = (VELOCITY * pulseIn(ECHO_LEVEL, HIGH)) / 2;
+    
+    Serial.print(F("Distance (Object): "));
+    Serial.println(distanceObj);
+    Serial.print(F("Distance (Level): "));
+    Serial.println(distanceLevel);
+    
+    if (distanceLevel > DISTANCE_THRESHOLD_LEVEL && distanceObj < DISTANCE_THRESHOLD_OBJ) {
+        isOpen = true;
+        isFull = false;
+        myServo.write(SERVO_OPEN);
+        Serial.println(F("Trash detected, garbage level under limit, bin opened."));
+        digitalWrite(GREEN_LED, HIGH);
+        digitalWrite(RED_LED, LOW);
+        tone(ALARM, ALARM_FREQUENCY);
+    } else {
+        isOpen = false;
+        isFull = true;
+        myServo.write(SERVO_CLOSED);
+        Serial.println(F("Trash not detected, bin remains closed."));
+        digitalWrite(RED_LED, HIGH);
+        digitalWrite(GREEN_LED, LOW);
+        noTone(ALARM);
+    }
+    
+    sendData(THING, PROPERTY1, isFull);
+    sendData(THING, PROPERTY2, isOpen);
+    sendData(THING, PROPERTY3, distanceLevel);
+    sendData(THING, PROPERTY4, distanceObj);
+    
+    delay(500);
+}
