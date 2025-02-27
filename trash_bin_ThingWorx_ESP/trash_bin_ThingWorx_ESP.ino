@@ -18,8 +18,8 @@ const float velocity=0.034;
 Servo myservo; 
 
 
-const char* ssid = "MANI DCS";
-const char* password = "Mani1337";
+const char* ssid = "MANI";
+const char* password = "Mani6652";
 /*const char* ssid = "dlink-B2CE";
 const char* password = "Scetngp2021";  
 /*const char* ssid = "realme";
