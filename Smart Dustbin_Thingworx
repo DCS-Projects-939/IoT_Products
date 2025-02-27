@@ -27,8 +27,8 @@ bool isFull, isOpen;
 Servo myServo;
 
 // WiFi Credentials
-const char ssid[] = "MANI DCS";
-const char password[] = "Mani1337";
+const char ssid[] = "MANI";
+const char password[] = "Mani6652";
 const char host[] = "thingworx.scetngp.com";
 const int httpsPort = 80;
 
